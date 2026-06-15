@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote name="nagendra" fetch="ssh://git@github.com/Nagendra9Kumar" revision="lineage-23.2" />
+
+  <!-- device -->
+  <project name="android_device_motorola_tank" path="device/motorola/tank" remote="nagendra" />
+  <project name="android_hardware_motorola" path="hardware/motorola" remote="nagendra" />
+
+  <!-- vendor -->
+  <project name="proprietary_vendor_motorola_tank" path="vendor/motorola/tank" remote="nagendra" />
+  <project name="android_vendor_motorola_sm7450-common" path="vendor/motorola/sm7450-common" remote="nagendra" />
+
+  <!-- kernel -->
+  <project name="android_kernel_motorola_sm7450" path="kernel/motorola/sm7450" remote="nagendra" />
+  <project name="android_kernel_motorola_sm7450-modules" path="kernel/motorola/sm7450-modules" remote="nagendra" />
+  <project name="android_kernel_motorola_sm7450-devicetrees" path="kernel/motorola/sm7450-devicetrees" remote="nagendra" />
+</manifest>
