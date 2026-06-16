@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
-  <remote name="nagendra" fetch="ssh://git@github.com/Nagendra9Kumar" revision="lineage-23.2" />
+  <remote name="nagendra" fetch="https://github.com/Nagendra9Kumar" revision="lineage-23.2" />
 
   <!-- device -->
   <project name="android_device_motorola_tank" path="device/motorola/tank" remote="nagendra" />
+  <project name="android_device_motorola_sm7450-common" path="device/motorola/sm7450-common" remote="nagendra" />
   <project name="android_hardware_motorola" path="hardware/motorola" remote="nagendra" />
 
   <!-- vendor -->
