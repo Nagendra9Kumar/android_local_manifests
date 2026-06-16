@@ -1,0 +1,173 @@
+name: LineageOS tank build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'LineageOS release branch'
+        required: true
+        default: 'lineage-23.2'
+      variant:
+        description: 'Build variant'
+        required: true
+        default: 'userdebug'
+      use_self_hosted:
+        description: 'Use self-hosted runner (your 2GB server)'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'true'
+      ccache_size:
+        description: 'ccache size'
+        required: true
+        default: '20G'
+
+concurrency:
+  group: ${{ github.workflow }}-tank
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.use_self_hosted == 'true' && fromJSON('["self-hosted", "linux", "tank"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 360
+
+    env:
+        BRANCH: ${{ github.event.inputs.release }}
+        VARIANT: ${{ github.event.inputs.variant }}
+        CCACHE_SIZE: ${{ github.event.inputs.ccache_size }}
+        DEVICE: tank
+
+    steps:
+      - name: Maximize build space (hosted only)
+        if: ${{ github.event.inputs.use_self_hosted != 'true' }}
+        run: |
+            sudo rm -rf /usr/share/dotnet
+            sudo rm -rf /opt/ghc
+            sudo rm -rf /usr/local/lib/android
+            sudo rm -rf /usr/local/share/boost
+            df -h
+
+      # --- Self-hosted runner setup with swap ---
+      - name: Add swap (self-hosted 2GB server)
+        if: ${{ github.event.inputs.use_self_hosted == 'true' }}
+        run: |
+            if [ ! -f /swapfile ] && [ $(free -g | awk '/^Mem:/{print $2}') -lt 4 ]; then
+                echo "Adding 8GB swap (low RAM detected)"
+                sudo fallocate -l 8G /swapfile
+                sudo chmod 600 /swapfile
+                sudo mkswap /swapfile
+                sudo swapon /swapfile
+                free -h
+            else
+                echo "Swap exists or RAM sufficient"
+                swapon --show
+            fi
+
+      - name: Install dependencies
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y \
+                bc bison build-essential ccache curl flex \
+                g++-multilib gcc-multilib git gnupg gperf \
+                imagemagick lib32readline-dev lib32z1-dev \
+                libelf-dev liblz4-tool libsdl1.2-dev \
+                libssl-dev libxml2 libxml2-utils lzop \
+                pngcrush rsync schedtool squashfs-tools \
+                xsltproc zip zlib1g-dev python3
+            # Repo tool
+            mkdir -p ~/bin
+            curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+            chmod a+x ~/bin/repo
+            echo "PATH=$HOME/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Configure git
+        run: |
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "actions@github.com"
+            git config --global color.ui false
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+            path: ~/.ccache
+            key: ccache-${{ env.DEVICE }}-${{ env.BRANCH }}-${{ github.run_id }}
+            restore-keys: |
+                ccache-${{ env.DEVICE }}-${{ env.BRANCH }}-
+
+      - name: Cache source
+        uses: actions/cache@v4
+        with:
+            path: lineage
+            key: src-${{ env.DEVICE }}-${{ env.BRANCH }}-${{ github.sha }}
+            restore-keys: |
+                src-${{ env.DEVICE }}-${{ env.BRANCH }}-
+
+      - name: Initialize repo
+        run: |
+            mkdir -p lineage
+            cd lineage
+            repo init -u https://github.com/LineageOS/android.git -b $BRANCH --no-tags
+
+      - name: Apply local manifest
+        run: |
+            cd lineage
+            mkdir -p .repo/local_manifests
+            curl -L -o .repo/local_manifests/roomservice.xml \
+                https://raw.githubusercontent.com/Nagendra9Kumar/android_local_manifests/lineage-23.2/default.xml
+            cat .repo/local_manifests/roomservice.xml
+
+      - name: Sync sources
+        run: |
+            cd lineage
+            repo sync -c --no-clone-bundle --force-sync --optimized-fetch
+
+      - name: Configure ccache
+        run: |
+            ccache -M $CCACHE_SIZE
+            ccache -o compression=true
+
+      - name: Setup environment
+        run: |
+            cd lineage
+            source build/envsetup.sh
+            breakfast lineage_tank
+
+      - name: Build
+        run: |
+            cd lineage
+            source build/envsetup.sh
+            export USE_CCACHE=1
+            export CCACHE_EXEC=$(which ccache)
+            # Adaptive -j: hosted = 4, self-hosted = 2
+            if [ "${{ github.event.inputs.use_self_hosted }}" = "true" ]; then
+                mka bacon -j2
+            else
+                mka bacon -j4
+            fi
+
+      - name: Show ccache stats
+        if: always()
+        run: |
+            ccache -s
+            du -sh ~/.ccache
+
+      - name: Upload ROM zip
+        uses: actions/upload-artifact@v4
+        with:
+            name: lineage-${{ env.DEVICE }}-${{ env.BRANCH }}
+            path: |
+                lineage/out/target/product/${{ env.DEVICE }}/lineage_*.zip
+                lineage/out/target/product/${{ env.DEVICE }}/lineage_*.zip.sha256
+            if-no-files-found: error
+            retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+            name: build-log-${{ env.DEVICE }}
+            path: lineage/build.log
+            if-no-files-found: warn
+            retention-days: 7
