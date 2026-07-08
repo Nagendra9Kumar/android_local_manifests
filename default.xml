@@ -8,7 +8,8 @@
   <project name="LineageOS/android_hardware_motorola" path="hardware/motorola" remote="github" revision="lineage-23.2"/>
 
   <!-- vendor -->
-  <!-- <project name="proprietary_vendor_motorola_tank" path="vendor/motorola/tank" remote="nagendra" /> -->
+  <project name="proprietary_vendor_motorola_tank" path="vendor/motorola/tank" remote="nagendra" />
+   <project name="proprietary_vendor_motorola_sm7450-common" path="vendor/motorola/sm7450-common" remote="nagendra" />
   
   <!-- kernel (using prebuilt instead of source) -->
   <project name="android_device_motorola_tank-kernel" path="device/motorola/tank-kernel" remote="nagendra" />
